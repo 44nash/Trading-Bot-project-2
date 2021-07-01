@@ -25,6 +25,23 @@ def get_ema(timeseries: Union[pd.Series, pd.DataFrame] = None,
     return timeseries.ewm(**kwargs).mean()
 
 
+def get_dema(timeseries: Union[pd.Series, pd.DataFrame] = None,
+             window: float = None,
+             calc_method: str = 'span') -> Union[pd.Series, pd.DataFrame]:
+    """
+    Helper function to calculate the double exponential moving average (DEMA)
+    of an input timeseries.
+
+    See [here](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.ewm.html?highlight=ewm#pandas.DataFrame.ewm)
+    for information about the four `calc_methods` {'alpha', 'com', 'halflife',
+    'span'}.
+    """
+    kwargs = dict(window=window, calc_method=calc_method)
+    ema1_vals = get_ema(timeseries, **kwargs)
+    ema2_vals = get_ema(ema1_vals, **kwargs)
+    return (2 * ema1_vals) - ema2_vals
+
+
 def main() -> None:
     return None
 
