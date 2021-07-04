@@ -18,7 +18,7 @@ plt.style.use('fivethirtyeight')
 class MarcusIndicators(BaseEstimator, TransformerMixin):
     
     
-    ma_types_ = {'stochastic oscillator', 'ichimoku cloud'}
+    ma_types_ = {'stochastic oscillator', 'ichimoku cloud', 'fibonacci retracement'}
     
     def __init__( 
         self,
@@ -52,6 +52,8 @@ class MarcusIndicators(BaseEstimator, TransformerMixin):
             X['14-low'] = ticker['14-low']
         elif self.ma_type == 'ichimoku cloud':
             ichimoku_dataframe(X,  view_limit=100)
+        elif self.ma_type == 'fibonacci retracement':
+             get_fib_retracement_levels(X)
         return X
     
     
@@ -277,3 +279,97 @@ def plot_ichimoku(ticker,  view_limit=100):
     plt.fill_between(date_axis, d2['senkou_span_a'], d2['senkou_span_b'], where=d2['senkou_span_a']> d2['senkou_span_b'], facecolor='#008000', interpolate=True, alpha=0.25)
     # red cloud
     plt.fill_between(date_axis, d2['senkou_span_a'], d2['senkou_span_b'], where=d2['senkou_span_b']> d2['senkou_span_a'], facecolor='#ff0000', interpolate=True, alpha=0.25)
+    
+    
+    
+    
+    
+# Fibonacci retracement
+
+
+def get_fib_retracement_levels(data):
+    """
+    Helper function to calculate the fibonacci retracement levels
+    """
+    #Fibonacci retracement levels ratios
+    retracement_levels = [0.236, 0.382, 0.5 , 0.618]
+    
+    #min and max of Close price
+    closePriceMax = data['close'].max()
+    closePriceMin = data['close'].min()
+    
+    #the difference between max and min Close Price (total up/down move)
+    diff = closePriceMax - closePriceMin
+    
+    
+    
+    #calculation of price per retracement levels ratios
+    level_1 = closePriceMax - retracement_levels[0] * diff
+    level_2 = closePriceMax - retracement_levels[1] * diff
+    level_3 = closePriceMax - retracement_levels[2] * diff
+    level_4 = closePriceMax - retracement_levels[3] * diff
+    
+    #Print the price at each level
+    print("Level Percentage\t", "Price ($)")
+    print("00.0%\t\t", closePriceMax)
+    print("23.6%\t\t", level_1)
+    print("38.2%\t\t", level_2)
+    print("50.0%\t\t", level_3)
+    print("61.8%\t\t", level_4)
+    print("100.0%\t\t", closePriceMin)
+    
+    data['fib_close_min'] = closePriceMin
+    data['fib_level_1'] = level_1
+    data['fib_level_2'] = level_2
+    data['fib_level_3'] = level_3
+    data['fib_level_4'] = level_4
+    data['fib_close_max'] = closePriceMax
+
+    
+    
+#     return data, closePriceMin, level_1, level_2, level_3, level_4, closePriceMax
+    return data
+
+
+
+
+
+
+
+# This is how you call it 
+# fib_retracement_plot(
+#     ticker,
+#     ticker['fib_close_min'][0],
+#     ticker['fib_level_1'][0],
+#     ticker['fib_level_2'][0], 
+#     ticker['fib_level_3'][0],
+#     ticker['fib_level_4'][0],
+#     ticker['fib_close_max'][0])
+def fib_retracement_plot(df, closePriceMin, level_1, level_2, level_3, level_4, closePriceMax):
+
+    new_df = df
+    plt.figure(figsize=(12.33,4.5))
+#     ax = fig.add_subplot(1,1,1)
+    
+    plt.title('Fibonnacci Retracement Plot')
+    plt.plot(new_df.index, new_df['close'])
+    
+    plt.axhline(closePriceMax, linestyle='--', alpha=0.5, color = 'red')
+    plt.fill_between(df.index, closePriceMax, level_1, color = 'red')
+    
+    plt.axhline(level_1, linestyle='--', alpha=0.5, color = 'orange')
+    plt.fill_between(df.index, level_1, level_2, color = 'orange')
+    
+    plt.axhline(level_2, linestyle='--', alpha=0.5, color = 'yellow')
+    plt.fill_between(df.index, level_2, level_3, color = 'yellow')
+    
+    plt.axhline(level_3, linestyle='--', alpha=0.5, color = 'green')
+    plt.fill_between(df.index, level_3, level_4, color = 'green')
+    
+    plt.axhline(level_4, linestyle='--', alpha=0.5, color = 'blue')
+    plt.fill_between(df.index, level_4, closePriceMin, color = 'blue')
+    
+    plt.axhline(closePriceMin, linestyle='--', alpha=0.5, color = 'purple')
+    plt.xlabel('Date',fontsize=18)
+    plt.ylabel('Close Price in USD',fontsize=18)
+    plt.show()
