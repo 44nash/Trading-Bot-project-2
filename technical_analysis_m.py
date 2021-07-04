@@ -17,21 +17,41 @@ plt.style.use('fivethirtyeight')
 
 class MarcusIndicators(BaseEstimator, TransformerMixin):
     
-    indicators = {'stochastic oscillator'}
     
-    def __init__( self, window): 
+    ma_types_ = {'stochastic oscillator', 'ichimoku cloud'}
+    
+    def __init__( 
+        self,
+        ma_type: str = 'stochastic oscillator',
+        window: int = 20,
+        input_label: str = 'close',
+        output_label: str = None,
+                ):
+        # Check user's arguments
+        self.ma_type = ma_type.lower()
+        if not (self.ma_type in self.ma_types_):
+            raise ValueError(f"ERROR: Moving-average type \'{self.ma_type}\' "
+                             f"not in {self.ma_types_}!")
+            
+        # Assign member data
         self.window = window
+        self.input_label = input_label
+        if output_label is None:
+            self.output_label = f"{self.ma_type}{self.window}"
 
         
     def fit(self, X: pd.DataFrame, **fit_params):
         return self  # nothing to do!
     
     def transform(self, X: pd.DataFrame, y=None, **fit_params) -> pd.DataFrame:
-        ticker = stochastic_oscillator(X)
-        X['%K'] =  ticker['%K'] 
-        X['%D'] =  ticker['%D']
-        X['14-high'] = ticker['14-high'] 
-        X['14-low'] = ticker['14-low'] 
+        if self.ma_type == 'stochastic oscillator':
+            ticker = stochastic_oscillator(X)
+            X['%K'] =  ticker['%K'] 
+            X['%D'] =  ticker['%D']
+            X['14-high'] = ticker['14-high'] 
+            X['14-low'] = ticker['14-low']
+        elif self.ma_type == 'ichimoku cloud':
+            ichimoku_dataframe(X,  view_limit=100)
         return X
     
     
@@ -109,3 +129,151 @@ def plot_sell_buy(ticker, buy_price, sell_price, stoch_signal):
     ax2.set_title('AALP STOCH')
     ax2.legend()
     plt.show()
+    
+    
+    
+    
+    
+# Ichimoku Kinko Hyo Cloud
+
+
+
+tenkan_window = 20
+kijun_window = 60
+senkou_span_b_window = 120
+cloud_displacement = 30
+chikou_shift = -30
+
+def kijun_sen(df,kijun_window ):
+
+    # Kijun 
+    kijun_sen_high = df['high'].rolling( window=kijun_window ).max()
+    kijun_sen_low = df['low'].rolling( window=kijun_window ).min()
+    df['kijun_sen'] = (kijun_sen_high + kijun_sen_low) / 2
+
+    return df
+
+def kijun_sen_plot(ticker,kijun_window):
+    ticker = kijun_sen(ticker,kijun_window)
+    # plt.plot(ticker[-250:, Close], color = 'black', label = 'EURUSD')
+    plt.plot(ticker["close"], color = 'black',label = "AAPL")
+    # plt.plot(ticker[-250:, where], color = 'blue', label = 'Kijun-Sen')
+    plt.plot(ticker["kijun_sen"], color = 'blue',label = "Kijun-Sen")
+    plt.grid()
+    plt.legend()
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+def tenkan_sen(df,tenkan_window ):
+    # Tenkan 
+    tenkan_sen_high = df['high'].rolling( window=tenkan_window ).max()
+    tenkan_sen_low = df['low'].rolling( window=tenkan_window ).min()
+    df['tenkan_sen'] = (tenkan_sen_high + tenkan_sen_low) /2
+    
+    return df
+
+def tenkan_sen_plot(ticker, tenkan_window ):
+    ticker = tenkan_sen(ticker, tenkan_window )
+    plt.plot(ticker["close"], color = 'black', label = 'AAPL')
+    plt.plot(ticker['tenkan_sen'], color = 'red', label = 'Tenkan-Sen')
+    plt.grid()
+    plt.legend()
+    
+    
+    
+    
+    
+    
+    
+    
+
+
+def Senkou_Span_A(df, cloud_displacement ):
+    # Senkou Span A 
+    df['senkou_span_a'] = ((df['tenkan_sen'] + df['kijun_sen']) / 2).shift(cloud_displacement)
+    return df
+
+def Senkou_Span_B(df, senkou_span_b_window):
+    # Senkou Span B 
+    senkou_span_b_high = df['high'].rolling( window=senkou_span_b_window ).max()
+    senkou_span_b_low = df['low'].rolling( window=senkou_span_b_window ).min()
+    df['senkou_span_b'] = ((senkou_span_b_high + senkou_span_b_low) / 2).shift(cloud_displacement)
+    return df
+
+def Senkou_Span_plot(ticker, senkou_span_b_window):
+    ticker_span_b = Senkou_Span_B(ticker, senkou_span_b_window)
+    ticker_span_a = Senkou_Span_A(ticker, cloud_displacement )
+    plt.plot(ticker["close"] , color = 'black', label = 'AAPL')
+    plt.plot(ticker_span_b['senkou_span_a'] , color = 'yellow', label = 'senkou_span_a')
+    plt.plot(ticker_span_b['senkou_span_b'] , color = 'cyan', label = 'senkou_span_b')
+    plt.grid()
+    plt.legend()
+
+
+
+
+
+
+
+
+def Chikou(df, chikou_shift):
+    # Chikou
+    df['chikou_span']  = df["close"].shift(chikou_shift)
+    return df
+def Chikou_plot(ticker, chikou_shift):
+    ticker = Chikou(ticker, chikou_shift)
+    plt.plot(ticker["close"] , color = 'black', label = 'AAPL')
+    plt.plot(ticker['chikou_span'] , color = 'green', label = 'Chikou-Span')
+    plt.grid()
+    plt.legend()
+
+
+
+
+
+
+def ichimoku_dataframe(ticker,  view_limit=100): 
+    
+    ticker = kijun_sen(ticker,kijun_window)
+    ticker = tenkan_sen(ticker, tenkan_window )
+    ticker = Chikou(ticker, chikou_shift)
+    ticker = Senkou_Span_B(ticker, senkou_span_b_window)
+    ticker = Senkou_Span_A(ticker, cloud_displacement )
+    
+    return ticker
+    
+
+# fig, ax = plt.subplots() 
+def plot_ichimoku(ticker,  view_limit=100): 
+    
+    ticker0 = kijun_sen(ticker,kijun_window)
+    ticker1 = tenkan_sen(ticker0, tenkan_window )
+    ticker2 = Chikou(ticker1, chikou_shift)
+    ticker3 = Senkou_Span_B(ticker2, senkou_span_b_window)
+    ticker4 = Senkou_Span_A(ticker3, cloud_displacement )
+    
+    df = ticker4
+    
+    d2 = df.loc[:, ['tenkan_sen','kijun_sen','senkou_span_a','senkou_span_b', 'chikou_span']]
+    d2 = d2.tail(view_limit)
+    date_axis = d2.index.values
+    # ichimoku
+    plt.plot(date_axis, d2['tenkan_sen'], label="tenkan", color='#0496ff', alpha=0.65,linewidth=1)
+    plt.plot(date_axis, d2['kijun_sen'], label="kijun", color="#991515", alpha=0.65,linewidth=1)
+    plt.plot(date_axis, d2['senkou_span_a'], label="span a", color="#008000", alpha=0.65,linewidth=1)
+    plt.plot(date_axis, d2['senkou_span_b'], label="span b", color="#ff0000", alpha=0.65, linewidth=1)
+    plt.plot(date_axis, d2['chikou_span'], label="chikou", color="#ffffff", alpha=0.65, linewidth=1)
+    # green cloud
+    plt.fill_between(date_axis, d2['senkou_span_a'], d2['senkou_span_b'], where=d2['senkou_span_a']> d2['senkou_span_b'], facecolor='#008000', interpolate=True, alpha=0.25)
+    # red cloud
+    plt.fill_between(date_axis, d2['senkou_span_a'], d2['senkou_span_b'], where=d2['senkou_span_b']> d2['senkou_span_a'], facecolor='#ff0000', interpolate=True, alpha=0.25)
