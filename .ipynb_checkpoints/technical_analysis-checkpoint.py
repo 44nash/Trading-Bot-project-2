@@ -19,6 +19,8 @@ def get_ema(timeseries: Union[pd.Series, pd.DataFrame] = None,
     """
     kwargs = {calc_method.lower(): window, 'min_periods': window}
     return timeseries.ewm(**kwargs).mean()
+
+
 def get_dema(timeseries: Union[pd.Series, pd.DataFrame] = None,
              window: float = None,
              calc_method: str = 'span') -> Union[pd.Series, pd.DataFrame]:
@@ -33,6 +35,8 @@ def get_dema(timeseries: Union[pd.Series, pd.DataFrame] = None,
     ema1_vals = get_ema(timeseries, **kwargs)
     ema2_vals = get_ema(ema1_vals, **kwargs)
     return (2 * ema1_vals) - ema2_vals
+
+
 def get_tema(timeseries: Union[pd.Series, pd.DataFrame] = None,
              window: float = None,
              calc_method: str = 'span') -> Union[pd.Series, pd.DataFrame]:
@@ -48,6 +52,8 @@ def get_tema(timeseries: Union[pd.Series, pd.DataFrame] = None,
     ema2_vals = get_ema(ema1_vals, **kwargs)
     ema3_vals = get_ema(ema2_vals, **kwargs)
     return (3 * ema1_vals) - (3 * ema2_vals) + ema3_vals
+
+
 def get_macd(price, slow, fast, smooth):
     exp1 = price.ewm(span = fast, adjust = False).mean()
     exp2 = price.ewm(span = slow, adjust = False).mean()
@@ -57,6 +63,8 @@ def get_macd(price, slow, fast, smooth):
     frames = [macd, signal, hist]
     df = pd.concat(frames, join = 'inner', axis = 1)
     return df
+
+
 def get_rsi(close, lookback):
     ret = close.diff()
     up = []
@@ -77,6 +85,8 @@ def get_rsi(close, lookback):
     rsi_df = pd.DataFrame(rsi).rename(columns = {0:'rsi'}).set_index(close.index)
     rsi_df = rsi_df.dropna()
     return rsi_df[3:]
+
+
 def get_bollinger(data, window):
     '''
     Function that creates bollinger bands for a given timeseries
@@ -86,27 +96,63 @@ def get_bollinger(data, window):
     upper_bb = sma + std * 2
     lower_bb = sma - std * 2
     return upper_bb, lower_bb, sma
+
+
 class BennyIndicators(BaseEstimator, TransformerMixin):
-    indicators = {'bolinger_bands', 'macd', 'rsi'}
+
+    indicators = {'bollinger_bands', 'macd', 'rsi'}
+    
     def __init__(
         self,
-        bb_window
+        indicator: str = 'bollinger_bands',
+        bb_window: int = 20,
+        fast: int = 12,
+        slow: int = 26,
+        smooth: int = 9,
+        lookback: int = 14,
+        input_label: str = 'close',
+        output_label: str = None
         ):
+        
+         # Check user's arguments
+        self.indicator = indicator.lower()
+        if not (self.indicator in self.indicator):
+            raise ValueError(f"ERROR: indicator type \'{self.indicator}\' "
+                             f"not in {self.indicator}!")
+            
         self.bb_window = bb_window
+        self.lookback = lookback
+        self.slow = slow
+        self.fast = fast
+        self.smooth = smooth
+        self.input_label = input_label
+        
+        if output_label is None:
+            self.output_label = f"{self.indicator}{self.bb_window}"
+            
     def fit(self, X: pd.DataFrame, **fit_params):
         return self  # nothing to do!
+    
     def transform(self, X: pd.DataFrame, y=None, **fit_params) -> pd.DataFrame:
         close_vals = X['close']
+        
         # calculate bollinger bands
-        upper_bb, lower_bb, sma = get_bollinger(close_vals, self.bb_window)
-        X['upper_bb'] = upper_bb
-        X['lower_bb'] = lower_bb
-        X['middle_bb'] = sma
+        if self.indicator == 'bollinger_bands':
+            upper_bb, lower_bb, sma = get_bollinger(close_vals, self.bb_window)
+            X['upper_bb'] = upper_bb
+            X['lower_bb'] = lower_bb
+            X['middle_bb'] = sma
+        
         # calculate rsi
-        X['rsi'] = get_rsi(close_vals, 14)
+        elif self.indicator == 'rsi':
+            X['rsi'] = get_rsi(close_vals, self.lookback)
+        
         # calculate macd
-        # macd = get_macd()
+        elif self.indicator == 'macd':
+            X['macd'] = get_macd(close_vals, self.slow, self.fast, self.smooth)
         return X
+
+
 class MovingAverageAdder(BaseEstimator, TransformerMixin):
     """
     TODO: Documentation.
