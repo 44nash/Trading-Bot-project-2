@@ -58,15 +58,16 @@ def get_tema(timeseries: Union[pd.Series, pd.DataFrame] = None,
     return (3 * ema1_vals) - (3 * ema2_vals) + ema3_vals
 
 
-def get_macd(price, slow, fast, smooth):
-    exp1 = price.ewm(span = fast, adjust = False).mean()
-    exp2 = price.ewm(span = slow, adjust = False).mean()
+def get_macd(price):
+    exp1 = price.ewm(span = 12, adjust = False).mean()
+    exp2 = price.ewm(span = 26, adjust = False).mean()
     macd = pd.DataFrame(exp1 - exp2).rename(columns = {'close':'macd'})
-    signal = pd.DataFrame(macd.ewm(span = smooth, adjust = False).mean()).rename(columns = {'macd':'signal'})
+    signal = pd.DataFrame(macd.ewm(span = 9, adjust = False).mean()).rename(columns = {'macd':'signal'})
     hist = pd.DataFrame(macd['macd'] - signal['signal']).rename(columns = {0:'hist'})
     frames = [macd, signal, hist]
     df = pd.concat(frames, join = 'inner', axis = 1)
     return df
+
 
 
 def get_rsi(close, lookback):
@@ -110,9 +111,9 @@ class BennyIndicators(BaseEstimator, TransformerMixin):
         self,
         indicator: str = 'bollinger_bands',
         bb_window: int = 20,
-        fast: int = 12,
-        slow: int = 26,
-        smooth: int = 9,
+        #fast: int = 12,
+        #slow: int = 26,
+        #smooth: int = 9,
         lookback: int = 14,
         input_label: str = 'close',
         output_label: str = None
@@ -120,15 +121,15 @@ class BennyIndicators(BaseEstimator, TransformerMixin):
         
         # Check user's arguments
         self.indicator = indicator.lower()
-        if not (self.indicator in self.indicator):
+        if not (self.indicator in self.indicators):
             raise ValueError(f"ERROR: indicator type \'{self.indicator}\' "
                              f"not in {self.indicator}!")
             
         self.bb_window = bb_window
         self.lookback = lookback
-        self.slow = slow
-        self.fast = fast
-        self.smooth = smooth
+        #self.slow = slow
+        #self.fast = fast
+        #self.smooth = smooth
         self.input_label = input_label
         
         if output_label is None:
@@ -153,7 +154,8 @@ class BennyIndicators(BaseEstimator, TransformerMixin):
         
         # calculate macd
         elif self.indicator == 'macd':
-            X['macd'] = get_macd(close_vals, self.slow, self.fast, self.smooth)
+            X = X.join(get_macd(close_vals))
+
         return X
 
 
