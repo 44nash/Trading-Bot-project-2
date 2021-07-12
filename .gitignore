@@ -138,3 +138,6 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Ignore database files (so that large files do not become part of git history)
+./data/*.csv
