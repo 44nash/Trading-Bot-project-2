@@ -38,6 +38,7 @@ API_SECRET = os.getenv("ALPACA_SECRET_KEY")
 APCA_API_BASE_URL = "https://paper-api.alpaca.markets"
 
 POLYGON_KEY = os.getenv("POLYGON_KEY")
+polygon_key2 = os.getenv("evil_einstein")
 
 
 
