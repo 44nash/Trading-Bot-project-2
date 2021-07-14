@@ -9,8 +9,11 @@ FOREX_CLUSTER = "forex"
 CRYPTO_CLUSTER = "crypto"
 
 
+
 class WebSocketClient:
     DEFAULT_HOST = "delayed.polygon.io"
+
+    current_price = 0
 
     # TODO: Either an instance of the client couples 1:1 with the cluster or an instance of the Client couples 1:3 with
     #  the 3 possible clusters (I think I like client per, but then a problem is the user can make multiple clients for
@@ -59,6 +62,8 @@ class WebSocketClient:
         self._authenticated.wait()
 
         sub_message = '{"action":"subscribe","params":"%s"}' % self._format_params(params)
+#         self.data(params)
+        print(self._format_params(params))
         self.ws.send(sub_message)
 
     def unsubscribe(self, *params):
@@ -74,7 +79,19 @@ class WebSocketClient:
     def _authenticate(self, ws):
         ws.send('{"action":"auth","params":"%s"}' % self.auth_key)
         self._authenticated.set()
+        
+        
+        
+        
+        
+#     # https://stackoverflow.com/questions/50066428/how-do-i-save-data-from-websocket
+#     def on_message(self, msg):
+#         results.append(msg)
 
+            
+            
+            
+            
     @staticmethod
     def _format_params(params):
         return ",".join(params)
@@ -109,3 +126,10 @@ class WebSocketClient:
     @staticmethod
     def _default_on_close(ws):
         print("### closed ###")
+        
+    def data(params):
+        
+        on_minute = params
+        
+        
+       
