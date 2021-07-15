@@ -287,7 +287,7 @@ def plot_ichimoku(ticker,  view_limit=100):
 # Fibonacci retracement
 
 
-def get_fib_retracement_levels(data):
+def get_fib_retracement_levels(data, verbosity: int = 0):
     """
     Helper function to calculate the fibonacci retracement levels
     """
@@ -302,7 +302,6 @@ def get_fib_retracement_levels(data):
     diff = closePriceMax - closePriceMin
     
     
-    
     #calculation of price per retracement levels ratios
     level_1 = closePriceMax - retracement_levels[0] * diff
     level_2 = closePriceMax - retracement_levels[1] * diff
@@ -310,13 +309,14 @@ def get_fib_retracement_levels(data):
     level_4 = closePriceMax - retracement_levels[3] * diff
     
     #Print the price at each level
-    print("Level Percentage\t", "Price ($)")
-    print("00.0%\t\t", closePriceMax)
-    print("23.6%\t\t", level_1)
-    print("38.2%\t\t", level_2)
-    print("50.0%\t\t", level_3)
-    print("61.8%\t\t", level_4)
-    print("100.0%\t\t", closePriceMin)
+    if verbosity > 0:
+        print("Level Percentage\t", "Price ($)")
+        print("00.0%\t\t", closePriceMax)
+        print("23.6%\t\t", level_1)
+        print("38.2%\t\t", level_2)
+        print("50.0%\t\t", level_3)
+        print("61.8%\t\t", level_4)
+        print("100.0%\t\t", closePriceMin)
     
     data['fib_close_min'] = closePriceMin
     data['fib_level_1'] = level_1
