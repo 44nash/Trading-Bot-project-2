@@ -24,6 +24,12 @@ mpl.rcParams['font.family'] = 'serif'
 from alpaca_trade_api import StreamConn
 from alpaca_trade_api.common import URL
 
+import time
+from polygon.websocket import WebSocketClient, STOCKS_CLUSTER
+
+import datetime
+import pandas as pd
+
 
 
 load_dotenv("../../../../api_keys.env")
@@ -49,7 +55,7 @@ class Bot:
         self.alpaca = tradeapi.REST(API_KEY, API_SECRET, APCA_API_BASE_URL, api_version='v2')
         self.symbol = symbol
     
-    def run(self, target_price, buy_sell):
+    def run(self):
         #On Each Minute
         async def on_minute(conn, channel, bar):
             symbol = bar.symbol
@@ -58,17 +64,16 @@ class Bot:
             print("Low: ", bar.low)
             print(symbol)
             #Check for Doji
-            if bar.close > bar.open and bar.open - bar.low > 0.1:
-                print('Buying on Doji!')
-                self.alpaca.submit_order(symbol,1,'buy','market','day')
+#             if bar.close > bar.open and bar.open - bar.low > 0.1:
+#                 print('Buying on Doji!')
+#                 self.alpaca.submit_order(symbol,1,'buy','market','day')
             #TODO : Take profit
 
             
         # Connect to get streaming market data
-        # conn = StreamConn('Polygon Key Here', 'Polygon Key Here', 'wss://alpaca.socket.polygon.io/stocks')
-        # 23oh7xy7ZoipBODtz9NTPh8B7z9EZrPG    
+        # conn = StreamConn('Polygon Key Here', 'Polygon Key Here', 'wss://alpaca.socket.polygon.io/stocks')  
         
-        conn = StreamConn(POLYGON_KEY , POLYGON_KEY , 'wss://alpaca.socket.polygon.io/stocks')
+        conn = StreamConn(polygon_key2 , polygon_key2 , 'wss://delayed.polygon.io/stocks')
         on_minute = conn.on(r'AM$')(on_minute)
         # Subscribe to Microsoft Stock 
         conn.run([f'AM.{self.symbol}'])
@@ -80,7 +85,9 @@ class Bot:
         
         
     def hello(self):
+        self.get_position()
         return "hello"
+        
         
     def get_position(self):
         openPosition = self.alpaca.get_position(self.symbol)
@@ -98,37 +105,142 @@ class Bot:
     
     def check_symbol_price(self):
         
-        async def on_minute(conn, channel, bar):
-            symbol = self.symbol
-            print("Close/ Current price: ", bar.close)
-            print("Open: ", bar.open)
-            print("Low: ", bar.low)
-            print(symbol)
+        daily_data = pd.read_csv('Daily_csv/daily.csv')
         
-        conn = StreamConn(POLYGON_KEY , POLYGON_KEY , 'wss://alpaca.socket.polygon.io/stocks')
-        on_minute = conn.on(r'AM$')(on_minute)
-        # Subscribe to Microsoft Stock 
-        # conn.run([f'AM.{self.symbol}'])
-        conn.run(['AM.MSFT'])
+        
+        target_price = daily_data.target_price[0]
+        buy_sell = daily_data.buy_sell[0]
+        
+        key = os.getenv("evil_einstein")
+        my_client = WebSocketClient(STOCKS_CLUSTER, key, my_custom_process_message)
+        my_client.run_async()
+        
+        my_client.
+
+        my_client.subscribe(f"AM.{self.symbol}")
+        time.sleep(10)
+        if my_client.c == target_price:
+            if buy_sell == 1:
+            #   self.alpaca.submit_order(symbol,1,'buy','market','day')
+                self.buy()
+            elif buy_sell == -1:
+                self.sell()
+            else:
+                print("Holding no action needed")
+
+        # if time it passed 4:00 pm est close the bot
+        now = datetime.datetime.now()
+        today4pm = now.replace(hour=16, minute=0, second=0, microsecond=0)
+        today8am = now.replace(hour=8, minute=0, second=0, microsecond=0)
+        if now > today4pm and now > today8am:
+            my_client.close_connection()
+        
+        
+        
+#         async def on_minute(conn, channel, bar):
+#             symbol = self.symbol
+#             print("Close/ Current price: ", bar.close)
+#             print("Open: ", bar.open)
+#             print("Low: ", bar.low)
+#             print(symbol)
             
-    def check(self):
-        conn = StreamConn(
-            API_KEY,
-            API_SECRET,
-            base_url=URL('wss://paper-api.alpaca.markets'),
-            data_url=URL('https://data.alpaca.markets'),
-            data_stream='alpacadatav1'
-        )
+            
+#             if bar.close == target_price:
+#                 if buy_sell == 'buy':
+#                 #   self.alpaca.submit_order(symbol,1,'buy','market','day')
+#                     self.buy()
+#                 elif buy_sell == 'sell':
+#                     self.sell()
+#                 else:
+#                     print("Holding no action needed")
+                    
+#             # if time it passed 4:00 pm est close the bot
+                
+                
+#         # wss://delayed.polygon.io/stocks
+#         conn = StreamConn(polygon_key2 , polygon_key2 , 'wss://delayed.polygon.io/stocks')
+#         on_minute = conn.on(r'AM$')(on_minute)
+#         # Subscribe to Microsoft Stock 
+#         # conn.run([f'AM.{self.symbol}'])
+#         conn.run(['AM.MSFT'])
+        
+        
+    def my_custom_process_message(message):
+        print("this is my custom message processing", message)
 
-        @conn.on(r'Q\..+')
-        async def on_quotes(conn, channel, quote):
-            print('quote', quote)
-            print("Close/ Current price: ", quote.close)
-            print("Open: ", quote.open)
-            print("Low: ", quote.low)
+
+    def my_custom_error_handler(ws, error):
+        print("this is my custom error handler", error)
 
 
-        conn.run(['alpacadatav1/Q.GOOG'])
+    def my_custom_close_handler(ws):
+        print("this is my custom close handler")
+        
+ 
+
+    
+# CHECK TIME CODE    
+# import datetime
+
+# now = datetime.datetime.now()
+# today4pm = now.replace(hour=16, minute=0, second=0, microsecond=0)
+# today8am = now.replace(hour=8, minute=0, second=0, microsecond=0)
+
+# print(f"now < today4pm {now < today4pm }")
+# print(f"now < today8am {now < today8am}")
+
+# print(f"now == today4pm {now == today4pm}")
+# print(f"now == today8am {now == today8am}")
+
+# print(f"now > today4pm {now > today4pm}")
+# print(f"now > today8am {now > today8am}")   
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+#     def check(self):
+#         conn = StreamConn(
+#             API_KEY,
+#             API_SECRET,
+#             base_url=URL('wss://paper-api.alpaca.markets'),
+#             data_url=URL('https://data.alpaca.markets'),
+#             data_stream='alpacadatav1'
+#         )
+
+#         @conn.on(r'Q\..+')
+#         async def on_quotes(conn, channel, quote):
+#             print('quote', quote)
+#             print("Close/ Current price: ", quote.close)
+#             print("Open: ", quote.open)
+#             print("Low: ", quote.low)
+
+
+#         conn.run(['alpacadatav1/Q.GOOG'])
 
 
 
