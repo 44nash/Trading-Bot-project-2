@@ -1,10 +1,9 @@
-import technical_indicators as ti  # our custom code!
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
-
-# TODO: Migrate everything into `technical_indicators.py`
+# Our custom technical-indicator code
+import technical_indicators as ti
 from technical_analysis_m import stochastic_oscillator
 from technical_analysis_m import get_fib_retracement_levels
 
@@ -15,7 +14,12 @@ class MLFeaturesAdder(BaseEstimator, TransformerMixin):
     containing {Open, High, Low, Close, Volume} (OHLCV) data from the stock
     market.
 
-    Here is the order the technical indicators are presented in the article:
+    The technical indicators implemented below come from the article entitled,
+    ["10 trading indicators every trader should know"](https://www.ig.com/us/trading-strategies/10-trading-indicators-every-trader-should-know-190604)
+    (accessed 15 Jul 2021).
+
+    The technical indicators are added to the input dataframe of OHLCV data
+    in the same order the indicators are presented in the article:
 
     - [x] Simple Moving Average (SMA)
     - [x] Exponential Moving Average (EMA)
@@ -23,8 +27,8 @@ class MLFeaturesAdder(BaseEstimator, TransformerMixin):
     - [x] Moving-Average Convergence/Divergence (MACD)
     - [x] Bollinger Bands (BBANDS)
     - [x] Relative Strength Index (RSI)
-    - [ ] Fibonacci Retracement (@Emmanuel)
-    - [ ] Ichimoku Cloud (@Marcus)
+    - [x] Fibonacci Retracement
+    - [ ] Ichimoku Cloud?
     - [x] Standard Deviation (STDEV)
     - [x] Average Directional Index (ADX)
 
@@ -49,8 +53,17 @@ class MLFeaturesAdder(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X: pd.DataFrame, y=None, **fit_params) -> pd.DataFrame:
-        # Cache average true range (ATR) -- used for normalization
+        """
+        Helper function to add all technical indicators to the input dataframe
+        containing OHLCV data.
+        """
+        # Cache average true range (ATR) -- used for normalization below
         atr_vals = ti.get_atr(X)
+
+        # Also cache the standard deviation of the closing prices -- used in
+        # Bollinger Bands, Fibonacci Retracements, and for standardization.
+        close_vals = X[self.close_label]
+        close_stdev = close_vals.rolling(window=20).std()
 
         #=======================================================================
         # 1. SIMPLE MOVING AVERAGES (SMAs) -------------------------------------
@@ -63,6 +76,11 @@ class MLFeaturesAdder(BaseEstimator, TransformerMixin):
         sma100 = ti.get_sma(X[self.close_label], window=100)
         sma200 = ti.get_sma(X[self.close_label], window=200)
         if self.normalize:
+            # Take the difference of the "fast" and "slow" moving averages and
+            # divide by the average true range (ATR) to normalize.  Also include
+            # a "random-walk factor" (i.e. the term in the square-root function)
+            # to include the contribution to volatility due to the difference
+            # between fast and slow moving-average lengths.
             X['SMA5*'] = (sma5 - sma10) / (atr_vals * np.sqrt(0.5 * abs(5 - 10)))
             X['SMA10*'] = (sma10 - sma20) / (atr_vals * np.sqrt(0.5 * abs(10 - 20)))
             X['SMA20*'] = (sma20 - sma50) / (atr_vals * np.sqrt(0.5 * abs(20 - 50)))
@@ -84,8 +102,12 @@ class MLFeaturesAdder(BaseEstimator, TransformerMixin):
         ema20 = ti.get_ema(X[self.close_label], window=20, calc_method='span')
         dema20 = ti.get_dema(X[self.close_label], window=20, calc_method='span')
         if self.normalize:
-            X['DEMA10*'] = (dema10 - ema10) / (atr_vals * np.sqrt(0.5 * abs(10 - 5)))
-            X['DEMA20*'] = (dema20 - ema20) / (atr_vals * np.sqrt(0.5 * abs(20 - 10)))
+            # Similar normalization as SMAs (see above).  Remember, the lag of
+            # an EMA is (N-1)/2, so the lag of a DEMA is (N-1).  This explains
+            # why the term in the square-root is slightly different than for
+            # the simple moving averages above.
+            X['DEMA10*'] = (dema10 - ema10) / (atr_vals * np.sqrt(0.5 * abs(20 - 10)))
+            X['DEMA20*'] = (dema20 - ema20) / (atr_vals * np.sqrt(0.5 * abs(40 - 20)))
         else:
             X['EMA10'] = ema10
             X['DEMA10'] = dema10
@@ -104,7 +126,7 @@ class MLFeaturesAdder(BaseEstimator, TransformerMixin):
             stoch_kfast_norm = (stoch_kfast - 50) / 50  # recenter to [-1, 1]
             stoch_dfast_norm = (stoch_dfast - 50) / 50
             X['STOCH_KFAST*'] = stoch_kfast_norm
-            X['STOCH_HIST*'] = stoch_kfast_norm - stoch_dfast_norm  # TODO: Renormalize
+            X['STOCH_HIST*'] = stoch_kfast_norm - stoch_dfast_norm  # TODO: `StandardScaler()`?
         else:
             X['STOCH_KFAST'] = stoch_kfast
             X['STOCH_DFAST'] = stoch_dfast
@@ -112,7 +134,7 @@ class MLFeaturesAdder(BaseEstimator, TransformerMixin):
         #=======================================================================
         # 4. MOVING-AVERAGE CONVERGENCE/DIVERGENCE (MACD) ----------------------
         #=======================================================================
-        macd_vals, macd_signal_vals, macd_hist_vals = ti.get_macd(X[self.close_label])
+        macd_vals, _, macd_hist_vals = ti.get_macd(X[self.close_label])
         if self.normalize:
             X['MACD*'] = macd_vals / (atr_vals * np.sqrt(0.5 * abs(12 - 26)))
             X['MACD_HIST*'] = macd_hist_vals / (atr_vals * np.sqrt(0.5 * abs(abs(12 - 26) - 9)))
@@ -125,11 +147,12 @@ class MLFeaturesAdder(BaseEstimator, TransformerMixin):
         #=======================================================================
         bbands_up, bbands_ct, bbands_dn = ti.get_bbands(X[self.close_label])
         if self.normalize:
-            close_vals = X[self.close_label]
-            close_stdev = close_vals.rolling(window=20).std()
-            #X['BBANDS_%B'] = ((close_vals - bbands_dn) / (bbands_up - bbands_dn))
-            X['BBANDS_%B'] = ((close_vals - bbands_dn) / (bbands_up - bbands_dn))
-            X['BBANDS_ZSCORE'] = (close_vals - bbands_ct) / close_stdev
+            # Let's use half the BB channel width as a meaningful measure of
+            # price scale.  
+            X['BBANDS_ZSCORE*'] = (close_vals - bbands_ct) / (2 * close_stdev)
+
+            # We could also look at the position of the close within the BB channel
+            #X['BBANDS_%B*'] = 2 * ((close_vals - bbands_dn) / (bbands_up - bbands_dn)) - 1  # [-1, 1]
         else:
             X['BBANDS_UP'] = bbands_up
             X['BBANDS_CT'] = bbands_ct
@@ -140,7 +163,7 @@ class MLFeaturesAdder(BaseEstimator, TransformerMixin):
         #=======================================================================
         rsi_vals = ti.get_rsi(X[self.close_label])
         if self.normalize:
-            X['RSI'] = (rsi_vals - 50) / 50
+            X['RSI*'] = (rsi_vals - 50) / 50
         else:
             X['RSI'] = rsi_vals
 
@@ -149,14 +172,14 @@ class MLFeaturesAdder(BaseEstimator, TransformerMixin):
         #=======================================================================
         df_fib = X[self.close_label].copy().to_frame().rename(columns={'Close': 'close'})
         df_fib = get_fib_retracement_levels(df_fib)
-        # 'fib_close_min',
-        # 'fib_level_1',
-        # 'fib_level_2',
-        # 'fib_level_3',
-        # 'fib_level_4',
-        # 'fib_close_max'
         if self.normalize:
-            pass
+            fib_range = 0.5 * (df_fib['fib_close_max'] - df_fib['fib_close_min']).abs()
+            X['FIB_MIN*'] = (close_vals - df_fib['fib_close_min']) / fib_range
+            X['FIB_236*'] = (close_vals - df_fib['fib_level_1']) / fib_range 
+            X['FIB_382*'] = (close_vals - df_fib['fib_level_2']) / fib_range
+            X['FIB_500*'] = (close_vals - df_fib['fib_level_3']) / fib_range
+            X['FIB_618*'] = (close_vals - df_fib['fib_level_4']) / fib_range
+            X['FIB_MAX*'] = (close_vals - df_fib['fib_close_max']) / fib_range
         else:
             X['FIB_MIN'] = df_fib['fib_close_min']
             X['FIB_236'] = df_fib['fib_level_1']
@@ -176,20 +199,18 @@ class MLFeaturesAdder(BaseEstimator, TransformerMixin):
         #=======================================================================
         # 9. STANDARD DEVIATION (STDEV) ----------------------------------------
         #=======================================================================
-        # Nothing to do here -- we've already implemented the standard deviation
-        # of the price, for example, in the Bollinger-Band calculation.  Also,
-        # we have calculated the Average True Range (ATR), which is yet another
-        # measure of volatility
-        X['ATR'] = atr_vals
+        X['STDEV'] = close_stdev
+        X['ATR'] = atr_vals  # another measure of volatility
 
         #=======================================================================
         # 10. AVERAGE DIRECTIONAL INDEX (ADX) ----------------------------------
         #=======================================================================
         adx_vals, di_plus_vals, di_minus_vals = ti.get_adx_dis(
-            X[[self.high_label, self.low_label, self.close_label]])
+            X[[self.high_label, self.low_label, self.close_label]]
+        )
         if self.normalize:
             X['ADX*'] = adx_vals / 100  # [0, 1]
-            X['DI_HIST*'] = (di_plus_vals - di_minus_vals) / 100  # [-1, 1]
+            X['DI_HIST*'] = (di_plus_vals - di_minus_vals) / 100  # ~[-1, 1]
         else:
             X['ADX'] = adx_vals
             X['DI+'] = di_plus_vals
